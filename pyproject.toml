@@ -1,0 +1,7 @@
+[project]
+name = "wordlepro"
+version = "0.1.0"
+description = "Finds the optimal solution for a game of Wordle"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
