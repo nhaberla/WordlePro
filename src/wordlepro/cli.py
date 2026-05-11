@@ -1,16 +1,21 @@
 import dataclasses
 import json as json_mod
+import random
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
-from rich.console import Console
+from rich.console import Console, Group
+from rich.control import Control
+from rich.live import Live
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn, TimeRemainingColumn
 from rich.table import Table
+from rich.text import Text
 
 from wordlepro.benchmark import run_benchmark
 from wordlepro.cache import get_cache_path
+from wordlepro.game import WordleGame
 from wordlepro.solver import NWordleSolver
 from wordlepro.words import load_word_lists
 
@@ -188,3 +193,81 @@ def benchmark(
     console.print(
         f"Total time: {result.elapsed_seconds:.1f}s  ({ms_per_word:.1f}ms per word)"
     )
+
+
+_TILE_STYLES = ["bold white on grey42", "bold white on dark_goldenrod", "bold white on green"]
+_EMPTY_STYLE = "dim white on grey23"
+
+
+def _render_board(game: WordleGame, max_guesses: int, message: str = "", prompt: str = "") -> Group:
+    table = Table.grid(padding=(0, 1))
+    for _ in range(5):
+        table.add_column(justify="center", min_width=3)
+
+    for guess, pattern in zip(game.guesses, game.patterns):
+        table.add_row(*[Text(f" {c.upper()} ", style=_TILE_STYLES[p]) for c, p in zip(guess, pattern)])
+
+    for _ in range(max_guesses - len(game.guesses)):
+        table.add_row(*[Text("   ", style=_EMPTY_STYLE)] * 5)
+
+    status = Text.from_markup(message) if message else Text(" ")
+    panel = Panel(Group(table, status), title="Wordle", subtitle="[dim]h = hint[/dim]")
+    return Group(Control.clear(), Control.home(), panel, Text(prompt))
+
+
+@app.command()
+def play(
+    answers_file: AnswersFile = None,
+    guesses_file: GuessesFile = None,
+    max_guesses: MaxGuesses = 6,
+    word: Annotated[Optional[str], typer.Option("--word", help="Secret word (omit for random)")] = None,
+) -> None:
+    """Play an interactive Wordle game."""
+    answers, guesses = load_word_lists(answers_file, guesses_file)
+    valid_guesses: set[str] = set(answers) | set(guesses)
+
+    if word is not None:
+        secret = word.strip().lower()
+        if secret not in valid_guesses:
+            console.print(f"[red]{secret!r} is not in the word list.[/red]")
+            raise typer.Exit(1)
+    else:
+        secret = random.choice(answers)
+
+    game_state = WordleGame(secret=secret, max_guesses=max_guesses, valid_guesses=valid_guesses)
+    message = ""
+
+    with Live(_render_board(game_state, max_guesses), auto_refresh=False, console=console) as live:
+        while not game_state.over:
+            prompt = f"Guess {len(game_state.guesses) + 1}/{max_guesses}: "
+            live.update(_render_board(game_state, max_guesses, message, prompt))
+            live.refresh()
+            raw = input("").strip().lower()
+
+            if raw == "h":
+                if not get_cache_path(answers, list(valid_guesses)).exists():
+                    message = "[yellow]Computing hint cache (one-time, ~10s)…[/yellow]"
+                    live.update(_render_board(game_state, max_guesses, message, prompt))
+                    live.refresh()
+                hint_solver = NWordleSolver(1, max_guesses, answers, guesses)
+                for g, pat in zip(game_state.guesses, game_state.patterns):
+                    hint_solver.limit_options(g, ["".join(str(v) for v in pat)])
+                hint_word, hint_bits = hint_solver.get_guess()
+                message = f"Hint: [bold]{hint_word.upper()}[/bold] ({hint_bits:.2f} bits)"
+                continue
+
+            try:
+                game_state.submit(raw)
+                message = ""
+            except ValueError as exc:
+                message = f"[red]{exc}[/red]"
+                continue
+
+        live.update(_render_board(game_state, max_guesses))
+        live.refresh()
+
+    if game_state.won:
+        n = len(game_state.guesses)
+        console.print(Panel(f"Solved in {n} guess{'es' if n != 1 else ''}!", title="[green]You win![/green]"))
+    else:
+        console.print(Panel(f"The word was [bold]{secret.upper()}[/bold].", title="[red]Game over[/red]"))

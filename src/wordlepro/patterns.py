@@ -6,6 +6,21 @@ from numpy.typing import NDArray
 NUM_PATTERNS: int = 3**5  # 243
 
 
+def compute_pattern(guess: str, answer: str) -> list[int]:
+    """Return per-position clue: 0=grey, 1=yellow, 2=green."""
+    result = [0] * len(guess)
+    pool = list(answer)
+    for i, (g, a) in enumerate(zip(guess, answer)):
+        if g == a:
+            result[i] = 2
+            pool[i] = ""
+    for i, g in enumerate(guess):
+        if result[i] == 0 and g in pool:
+            result[i] = 1
+            pool[pool.index(g)] = ""
+    return result
+
+
 def encode_word_list(words: list[str]) -> NDArray[np.uint8]:
     return np.array([[ord(c) for c in word] for word in words], dtype=np.uint8)
 
