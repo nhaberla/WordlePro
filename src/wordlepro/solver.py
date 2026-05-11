@@ -98,7 +98,7 @@ class NWordleSolver:
     def get_top_guesses(self, count: int) -> list[tuple[str, float]]:
         if self.curr_entropies is None:
             return []
-        best_indices = np.argpartition(self.curr_entropies, -count)[:(count + 1):-1]
+        best_indices = np.argpartition(self.curr_entropies, -count)[-count:][::-1]
         return [
             (self._all_guesses[int(i)], round(float(self.curr_entropies[i]), 2))
             for i in best_indices
