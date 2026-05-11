@@ -10,6 +10,7 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TaskProgressColumn
 from rich.table import Table
 
 from wordlepro.benchmark import run_benchmark
+from wordlepro.cache import get_cache_path
 from wordlepro.solver import NWordleSolver
 from wordlepro.words import load_word_lists
 
@@ -42,12 +43,10 @@ def solve(
     max_guesses: MaxGuesses = 6,
 ) -> None:
     """Interactively solve a Wordle game."""
-    solver = NWordleSolver.from_files(
-        num_boards=boards,
-        max_guesses=max_guesses,
-        answers_path=answers_file,
-        guesses_path=guesses_file,
-    )
+    answers, guesses = load_word_lists(answers_file, guesses_file)
+    if not get_cache_path(answers, guesses).exists():
+        console.print("[yellow]Cache not found — computing pattern matrix (one-time, ~10s)…[/yellow]")
+    solver = NWordleSolver(boards, max_guesses, answers, guesses)
 
     # Track which boards are solved and how many guesses used
     boards_solved: list[bool] = [False] * boards
