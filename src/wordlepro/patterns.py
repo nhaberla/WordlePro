@@ -46,5 +46,7 @@ def generate_pattern_matrix(
             equality[:, :, k, j].flat[matches] = False
             equality[:, :, i, k].flat[matches] = False
 
-    patterns = np.dot(clue_matrix, (3 ** np.arange(len_word)).astype(np.uint8))
+    patterns: NDArray[np.uint8] = np.dot(
+        clue_matrix, (3 ** np.arange(len_word)).astype(np.uint8)
+    )
     return patterns
