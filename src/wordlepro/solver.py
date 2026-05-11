@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.stats import entropy as scipy_entropy  # type: ignore[import-untyped]
+from scipy.stats import entropy as scipy_entropy
 
 from wordlepro.cache import get_cache_path, load_cache, save_cache
 from wordlepro.patterns import NUM_PATTERNS, generate_pattern_matrix
