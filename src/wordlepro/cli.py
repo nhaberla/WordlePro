@@ -1,11 +1,17 @@
+import dataclasses
+import json as json_mod
 from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, BarColumn, TaskProgressColumn, TimeElapsedColumn, TimeRemainingColumn
+from rich.table import Table
 
+from wordlepro.benchmark import run_benchmark
 from wordlepro.solver import NWordleSolver
+from wordlepro.words import load_word_lists
 
 app = typer.Typer(pretty_exceptions_show_locals=False)
 console = Console()
@@ -128,4 +134,58 @@ def benchmark(
     json: Annotated[bool, typer.Option("--json", help="Output results as JSON")] = False,
 ) -> None:
     """Benchmark the solver against every answer word."""
-    raise NotImplementedError
+    answers, guesses = load_word_lists(answers_file, guesses_file)
+
+    with Progress(
+        SpinnerColumn(),
+        "[progress.description]{task.description}",
+        BarColumn(),
+        TaskProgressColumn(),
+        TimeElapsedColumn(),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("Benchmarking...", total=len(answers))
+
+        def on_progress(n: int) -> None:
+            progress.update(task, completed=n)
+
+        result = run_benchmark(answers, guesses, boards, max_guesses, on_progress)
+
+    if json:
+        console.print(json_mod.dumps(dataclasses.asdict(result), indent=2))
+        return
+
+    dist = result.distribution
+    import statistics
+    median = int(statistics.median(result.guess_counts))
+    std = statistics.stdev(result.guess_counts) if len(result.guess_counts) > 1 else 0.0
+    ms_per_word = result.elapsed_seconds / result.total_words * 1000
+
+    title = (
+        f"Benchmark Results  "
+        f"({result.total_words} words, {boards} board{'s' if boards != 1 else ''}, "
+        f"max {max_guesses} guesses)"
+    )
+    table = Table(title=title, show_header=False, box=None, padding=(0, 1))
+    table.add_column(style="bold")
+    table.add_column()
+
+    table.add_row("Solved", f"{result.solved}/{result.total_words}")
+    table.add_row(f"Failed (>{max_guesses} guesses)", str(len(result.failed_words)))
+    table.add_row("Mean guesses", f"{result.mean_guesses:.2f}")
+    table.add_row("Median guesses", str(median))
+    table.add_row("Std dev", f"{std:.2f}")
+
+    for n in range(1, max_guesses + 1):
+        table.add_row(f"{n}-guess wins", str(dist.get(n, 0)))
+    table.add_row("Failures", str(dist.get(max_guesses + 1, 0)))
+
+    console.print(table)
+
+    if result.failed_words:
+        console.print(f"Failed words: {', '.join(w.upper() for w in result.failed_words)}")
+
+    console.print(
+        f"Total time: {result.elapsed_seconds:.1f}s  ({ms_per_word:.1f}ms per word)"
+    )
