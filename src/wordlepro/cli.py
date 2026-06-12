@@ -41,7 +41,9 @@ def solve(
     """Interactively solve a Wordle game."""
     answers, guesses = load_word_lists(answers_file, guesses_file)
     view = WordleView()
-    if not get_cache_path(answers, guesses).exists():
+    # The solver caches under the merged guess pool (answers ∪ guesses),
+    # so the existence check must use the same key.
+    if not get_cache_path(answers, sorted(set(answers) | set(guesses))).exists():
         view.warn_cache_miss()
     solver = NWordleSolver(boards, max_guesses, answers, guesses)
     SolveController(view, solver, boards, max_guesses).run()
