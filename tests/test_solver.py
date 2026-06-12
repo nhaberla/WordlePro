@@ -1,3 +1,6 @@
+import math
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -101,7 +104,38 @@ class TestConvergence:
         assert solver.num_guesses <= 6
 
 
+class TestFromFiles:
+    def test_loads_word_lists_from_paths(self, tmp_path: Path) -> None:
+        answers = tmp_path / "answers.txt"
+        guesses = tmp_path / "guesses.txt"
+        answers.write_text("\n".join(WORDS) + "\n")
+        guesses.write_text("\n".join(WORDS) + "\n")
+        solver = NWordleSolver.from_files(
+            num_boards=1, max_guesses=6, answers_path=answers, guesses_path=guesses
+        )
+        assert solver.num_answers == len(WORDS)
+
+
+class TestProperties:
+    def test_remaining_entropy_is_log2_of_num_answers(self) -> None:
+        solver = make_solver()
+        assert solver.remaining_entropy == pytest.approx(math.log2(len(WORDS)))
+
+    def test_reset_restores_initial_state(self) -> None:
+        solver = make_solver()
+        solver.get_guess()
+        solver.limit_options("abbot", ["22000"])
+        solver.reset()
+        assert solver.num_guesses == 0
+        assert solver.num_answers == len(WORDS)
+        assert solver.curr_entropies is None
+
+
 class TestGetTopGuesses:
+    def test_before_any_guess_returns_empty(self) -> None:
+        solver = make_solver()
+        assert solver.get_top_guesses(3) == []
+
     def test_returns_requested_count(self) -> None:
         solver = make_solver()
         solver.get_guess()
