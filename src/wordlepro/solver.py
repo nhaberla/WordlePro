@@ -112,22 +112,46 @@ class NWordleSolver:
     def limit_options(self, guess: str, results: list[str]) -> None:
         from wordlepro.patterns import encode_guess_result
 
+        if guess not in self.guesses:
+            raise ValueError(f"{guess!r} is not in the word list.")
+        if len(results) != self.num_boards:
+            raise ValueError(
+                f"Expected {self.num_boards} result(s), got {len(results)}."
+            )
+        for res in results:
+            if len(res) != len(guess):
+                raise ValueError(f"Result must be {len(guess)} digits, got {res!r}.")
+
         index = self.guesses[guess]
         search_vals = [encode_guess_result(res) for res in results]
 
-        self.boards_solved = [
+        boards_solved = [
             solved or val == 242
             for solved, val in zip(self.boards_solved, search_vals)
         ]
-        if self.solved:
+        if all(boards_solved):
+            self.boards_solved = boards_solved
             return
 
+        # Validate every board before mutating any, so a rejected result
+        # leaves the solver state untouched.
+        remaining_per_board: list[NDArray[np.intp]] = []
         for i in range(self.num_boards):
             remaining = np.array(
                 np.where(self.pattern_matrices[i][index] == search_vals[i])
             ).flatten()
+            if remaining.shape[0] == 0 and not boards_solved[i]:
+                raise ValueError(
+                    f"Result for board {i + 1} contradicts earlier clues — "
+                    "no possible answers remain."
+                )
+            remaining_per_board.append(remaining)
+
+        self.boards_solved = boards_solved
+        for i in range(self.num_boards):
             idx = np.ix_(
-                np.arange(self.pattern_matrices[i].shape[0]), remaining
+                np.arange(self.pattern_matrices[i].shape[0]),
+                remaining_per_board[i],
             )
             self.pattern_matrices[i] = self.pattern_matrices[i][idx]
 
