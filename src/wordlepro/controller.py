@@ -35,9 +35,14 @@ class SolveController:
                 guess_count += 1
                 message = f"Suggested guess: [bold]{guess.upper()}[/bold]  ({bits:.2f} bits)"
 
-                live.update(self.view.render_solve(board_rows, self.max_guesses, status, message, "Enter your guess: "))
-                live.refresh()
-                played = self.view.prompt_play_input()
+                while True:
+                    live.update(self.view.render_solve(board_rows, self.max_guesses, status, message, "Enter your guess: "))
+                    live.refresh()
+                    played = self.view.prompt_play_input()
+                    guess_error = self._guess_error(played)
+                    if guess_error is None:
+                        break
+                    message = f"[red]{guess_error}[/red]  Suggested: [bold]{guess.upper()}[/bold]"
 
                 unsolved_indices = [i for i in range(self.boards) if not boards_solved[i]]
                 board_labels = " ".join(f"b{i + 1}" for i in unsolved_indices)
@@ -81,6 +86,20 @@ class SolveController:
             live.refresh()
 
         self.view.show_solve_result(guess_count, self.solver.solved)
+
+    def _guess_error(self, played: str) -> str | None:
+        if any(c.isdigit() for c in played):
+            if any(c.isalpha() for c in played):
+                return (
+                    "Looks like a guess and result on one line — "
+                    "enter the guess, press return, then enter the result(s)."
+                )
+            return "Looks like a result — enter your guess word first."
+        if not played.isalpha() or len(played) != 5:
+            return "Guess must be a single 5-letter word."
+        if played not in self.solver.guesses:
+            return f"{played!r} is not in the word list."
+        return None
 
 
 class BenchmarkController:

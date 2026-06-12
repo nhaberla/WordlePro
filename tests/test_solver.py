@@ -32,6 +32,38 @@ class TestLimitOptions:
         assert solver.num_answers < before
 
 
+class TestLimitOptionsValidation:
+    def test_unknown_guess_raises(self) -> None:
+        solver = make_solver()
+        with pytest.raises(ValueError, match="word list"):
+            solver.limit_options("zzzzz", ["00000"])
+
+    def test_wrong_result_count_raises(self) -> None:
+        solver = make_solver()
+        with pytest.raises(ValueError, match="Expected 1 result"):
+            solver.limit_options("aback", ["00000", "00000"])
+
+    def test_wrong_result_length_raises(self) -> None:
+        solver = make_solver()
+        with pytest.raises(ValueError, match="5 digits"):
+            solver.limit_options("aback", ["012"])
+
+    def test_invalid_digits_raise(self) -> None:
+        solver = make_solver()
+        with pytest.raises(ValueError, match="0, 1, 2"):
+            solver.limit_options("aback", ["00003"])
+
+    def test_contradictory_result_raises_and_leaves_state_untouched(self) -> None:
+        solver = make_solver()
+        before = solver.num_answers
+        # Every word starts with 'a', so an all-grey result for "aback"
+        # matches no remaining answer.
+        with pytest.raises(ValueError, match="contradicts"):
+            solver.limit_options("aback", ["00000"])
+        assert solver.num_answers == before
+        assert solver.boards_solved == [False]
+
+
 class TestPossibleAnswers:
     def test_shape(self) -> None:
         solver = make_solver()
