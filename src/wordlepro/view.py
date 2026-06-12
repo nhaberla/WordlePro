@@ -3,7 +3,6 @@ import json as json_mod
 import statistics
 from typing import TYPE_CHECKING
 
-import typer
 from rich.console import Console, ConsoleRenderable, Group, RichCast
 from rich.control import Control
 from rich.live import Live
@@ -39,28 +38,29 @@ class WordleView:
 
     # --- Solve ---
 
-    def show_solve_status(self, remaining_parts: str, entropy: float, guess_num: int, max_guesses: int) -> None:
-        self.console.print(
-            Panel(
-                f"Remaining answers — {remaining_parts}\nEntropy: {entropy:.2f} bits",
-                title=f"Guess {guess_num} / {max_guesses}",
-            )
-        )
+    def render_solve(
+        self,
+        board_rows: list[list[tuple[str, list[int]]]],
+        max_guesses: int,
+        status: str,
+        message: str,
+        prompt: str,
+    ) -> Group:
+        layout = Table.grid(padding=(0, 2))
+        if len(board_rows) == 1:
+            layout.add_column(vertical="middle")
+            layout.add_column(vertical="middle")
+            layout.add_row(self._render_grid(board_rows[0], max_guesses), self._render_keyboard(board_rows[0]))
+        else:
+            for _ in board_rows:
+                layout.add_column(justify="center", vertical="middle")
+            layout.add_row(*[Text(f"Board {i + 1}", style="bold") for i in range(len(board_rows))])
+            layout.add_row(*[self._render_grid(rows, max_guesses) for rows in board_rows])
 
-    def show_suggested_guess(self, guess: str, bits: float) -> None:
-        self.console.print(f"Suggested guess: [bold]{guess.upper()}[/bold]  ({bits:.2f} bits)")
-
-    def prompt_played_guess(self) -> str:
-        return str(typer.prompt("Enter your guess")).strip().lower()
-
-    def prompt_results(self, board_labels: str) -> str:
-        return str(typer.prompt(f"Enter results ({board_labels})")).strip()
-
-    def show_results_error(self, msg: str) -> None:
-        self.console.print(f"[red]{msg}[/red]")
-
-    def show_board_solved(self, board_index: int) -> None:
-        self.console.print(f"[green]✓ Board {board_index + 1} solved![/green]")
+        status_line = Text.from_markup(status) if status else Text(" ")
+        message_line = Text.from_markup(message) if message else Text(" ")
+        panel = Panel(Group(layout, status_line, message_line), title="Wordle Solver")
+        return Group(Control.clear(), Control.home(), panel, Text(prompt))
 
     def show_solve_result(self, guess_count: int, solved: bool) -> None:
         if solved:
@@ -130,9 +130,9 @@ class WordleView:
 
     # --- Play ---
 
-    def _render_keyboard(self, game: WordleGame) -> Text:
+    def _render_keyboard(self, rows: list[tuple[str, list[int]]]) -> Text:
         letter_state: dict[str, int] = {}
-        for guess, pattern in zip(game.guesses, game.patterns):
+        for guess, pattern in rows:
             for ch, p in zip(guess, pattern):
                 if ch not in letter_state or p > letter_state[ch]:
                     letter_state[ch] = p
@@ -149,18 +149,22 @@ class WordleView:
                 out.append(f" {ch.upper()} ", style=style)
         return out
 
-    def render_board(self, game: WordleGame, max_guesses: int, message: str = "", prompt: str = "") -> Group:
+    def _render_grid(self, rows: list[tuple[str, list[int]]], max_guesses: int) -> Table:
         grid = Table.grid(padding=(0, 1))
         for _ in range(5):
             grid.add_column(justify="center", min_width=3)
 
-        for guess, pattern in zip(game.guesses, game.patterns):
+        for guess, pattern in rows:
             grid.add_row(*[Text(f" {c.upper()} ", style=_TILE_STYLES[p]) for c, p in zip(guess, pattern)])
 
-        for _ in range(max_guesses - len(game.guesses)):
+        for _ in range(max_guesses - len(rows)):
             grid.add_row(*[Text("   ", style=_EMPTY_STYLE)] * 5)
+        return grid
 
-        keyboard = self._render_keyboard(game)
+    def render_board(self, game: WordleGame, max_guesses: int, message: str = "", prompt: str = "") -> Group:
+        rows = list(zip(game.guesses, game.patterns))
+        grid = self._render_grid(rows, max_guesses)
+        keyboard = self._render_keyboard(rows)
         layout = Table.grid(padding=(0, 2))
         layout.add_column(vertical="middle")
         layout.add_column(vertical="middle")

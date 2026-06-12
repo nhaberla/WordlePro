@@ -15,56 +15,70 @@ class SolveController:
     def run(self) -> None:
         boards_solved: list[bool] = [False] * self.boards
         guess_count = 0
+        board_rows: list[list[tuple[str, list[int]]]] = [[] for _ in range(self.boards)]
+        message = ""
 
-        while not self.solver.game_over:
-            remaining_parts = " ".join(
-                f"board {i + 1}: {self.solver.pattern_matrices[i].shape[1]}"
-                for i in range(self.boards)
-                if not boards_solved[i]
-            )
-            self.view.show_solve_status(
-                remaining_parts,
-                self.solver.remaining_entropy,
-                self.solver.num_guesses + 1,
-                self.max_guesses,
-            )
+        with self.view.make_live(self.view.render_solve(board_rows, self.max_guesses, "", "", "")) as live:
+            while not self.solver.game_over:
+                remaining_parts = " ".join(
+                    f"board {i + 1}: {self.solver.pattern_matrices[i].shape[1]}"
+                    for i in range(self.boards)
+                    if not boards_solved[i]
+                )
+                status = (
+                    f"Guess {self.solver.num_guesses + 1}/{self.max_guesses}  |  "
+                    f"Remaining answers — {remaining_parts}  |  "
+                    f"Entropy: {self.solver.remaining_entropy:.2f} bits"
+                )
 
-            guess, bits = self.solver.get_guess()
-            guess_count += 1
-            self.view.show_suggested_guess(guess, bits)
+                guess, bits = self.solver.get_guess()
+                guess_count += 1
+                message = f"Suggested guess: [bold]{guess.upper()}[/bold]  ({bits:.2f} bits)"
 
-            played = self.view.prompt_played_guess()
+                live.update(self.view.render_solve(board_rows, self.max_guesses, status, message, "Enter your guess: "))
+                live.refresh()
+                played = self.view.prompt_play_input()
 
-            unsolved_indices = [i for i in range(self.boards) if not boards_solved[i]]
-            board_labels = " ".join(f"b{i + 1}" for i in unsolved_indices)
-            full_results: list[str] = []
+                unsolved_indices = [i for i in range(self.boards) if not boards_solved[i]]
+                board_labels = " ".join(f"b{i + 1}" for i in unsolved_indices)
+                results_prompt = f"Enter results ({board_labels}): "
+                full_results: list[str] = []
 
-            while True:
-                raw = self.view.prompt_results(board_labels)
-                parts = raw.split()
-                if len(parts) != len(unsolved_indices):
-                    self.view.show_results_error(
-                        f"Expected {len(unsolved_indices)} result(s), got {len(parts)}. "
-                        "Use digits 0 (grey) / 1 (yellow) / 2 (green)."
-                    )
-                    continue
+                while True:
+                    live.update(self.view.render_solve(board_rows, self.max_guesses, status, message, results_prompt))
+                    live.refresh()
+                    raw = self.view.prompt_play_input()
+                    parts = raw.split()
+                    if len(parts) != len(unsolved_indices):
+                        message = (
+                            f"[red]Expected {len(unsolved_indices)} result(s), got {len(parts)}. "
+                            "Use digits 0 (grey) / 1 (yellow) / 2 (green).[/red]"
+                        )
+                        continue
 
-                full_results = []
-                part_iter = iter(parts)
+                    full_results = []
+                    part_iter = iter(parts)
+                    for i in range(self.boards):
+                        full_results.append("22222" if boards_solved[i] else next(part_iter))
+
+                    try:
+                        self.solver.limit_options(played, full_results)
+                    except (ValueError, KeyError) as exc:
+                        message = f"[red]Invalid input: {exc}[/red]"
+                        continue
+                    break
+
+                solved_messages: list[str] = []
                 for i in range(self.boards):
-                    full_results.append("22222" if boards_solved[i] else next(part_iter))
+                    if not boards_solved[i]:
+                        board_rows[i].append((played, [int(c) for c in full_results[i]]))
+                        if full_results[i] == "22222":
+                            boards_solved[i] = True
+                            solved_messages.append(f"[green]✓ Board {i + 1} solved![/green]")
+                message = "  ".join(solved_messages)
 
-                try:
-                    self.solver.limit_options(played, full_results)
-                except (ValueError, KeyError) as exc:
-                    self.view.show_error(f"Invalid input: {exc}")
-                    continue
-                break
-
-            for i in range(self.boards):
-                if not boards_solved[i] and full_results[i] == "22222":
-                    boards_solved[i] = True
-                    self.view.show_board_solved(i)
+            live.update(self.view.render_solve(board_rows, self.max_guesses, "", message, ""))
+            live.refresh()
 
         self.view.show_solve_result(guess_count, self.solver.solved)
 
