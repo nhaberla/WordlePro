@@ -6,6 +6,7 @@ from typer.testing import CliRunner
 from wordlepro.cache import get_cache_path
 from wordlepro.cli import app
 from wordlepro.main import main
+from wordlepro.solver import NWordleSolver
 
 WORDS = [
     "aback", "abase", "abate", "abbey", "abbot",
@@ -39,6 +40,27 @@ class TestSolveCommand:
         )
         assert result.exit_code == 0
         assert "Cache not found" in result.output
+        assert "Solved in 1 guess!" in result.output
+
+    def test_no_warning_when_cache_is_warm(self, tmp_path: Path) -> None:
+        # Regression test: the cache-exists check must use the merged
+        # answers ∪ guesses key the solver caches under, which only
+        # differs from the raw guesses list when answers ⊄ guesses.
+        answers_file = tmp_path / "answers.txt"
+        guesses_file = tmp_path / "guesses.txt"
+        answers_file.write_text("\n".join(WORDS) + "\n")
+        guesses_file.write_text("\n".join(WORDS[5:]) + "\n")
+
+        # Constructing a solver warms the cache under the merged key.
+        NWordleSolver(1, 6, WORDS, WORDS[5:])
+
+        result = runner.invoke(
+            app,
+            ["solve", "--answers-file", str(answers_file), "--guesses-file", str(guesses_file)],
+            input="abase\n22222\n",
+        )
+        assert result.exit_code == 0
+        assert "Cache not found" not in result.output
         assert "Solved in 1 guess!" in result.output
 
 
