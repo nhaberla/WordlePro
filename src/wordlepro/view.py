@@ -60,7 +60,7 @@ class WordleView:
         status_line = Text.from_markup(status) if status else Text(" ")
         message_line = Text.from_markup(message) if message else Text(" ")
         panel = Panel(Group(layout, status_line, message_line), title="Wordle Solver")
-        return Group(Control.clear(), Control.home(), panel, Text(prompt))
+        return Group(panel, Text(prompt))
 
     def show_solve_result(self, guess_count: int, solved: bool) -> None:
         if solved:
@@ -172,10 +172,15 @@ class WordleView:
 
         status = Text.from_markup(message) if message else Text(" ")
         panel = Panel(Group(layout, status), title="Wordle", subtitle="[dim]h = hint[/dim]")
-        return Group(Control.clear(), Control.home(), panel, Text(prompt))
+        return Group(panel, Text(prompt))
 
     def prompt_play_input(self) -> str:
-        return input("").strip().lower()
+        raw = input("").strip().lower()
+        # input()'s echoed newline moves the cursor below where Live left it,
+        # so each repaint would walk one line down the screen. Undo it so Live
+        # redraws in place.
+        self.console.control(Control.move(y=-1))
+        return raw
 
     def show_play_result(self, game: WordleGame, secret: str) -> None:
         if game.won:
