@@ -1,5 +1,6 @@
 # WordlePro
 
+[![PyPI](https://img.shields.io/pypi/v/wordlepro)](https://pypi.org/project/wordlepro/)
 [![CI](https://github.com/nhaberla/WordlePro/actions/workflows/ci.yml/badge.svg)](https://github.com/nhaberla/WordlePro/actions/workflows/ci.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/nhaberla/WordlePro/python-coverage-comment-action-data/endpoint.json)](https://github.com/nhaberla/WordlePro/tree/python-coverage-comment-action-data)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue?logo=python&logoColor=white)](https://www.python.org/)
